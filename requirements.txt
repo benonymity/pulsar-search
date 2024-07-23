@@ -3,6 +3,5 @@ astroquery==0.4.7
 numpy==2.0.1
 opencv_python==4.9.0.80
 Pillow==9.5.0
-Pillow==10.4.0
 Requests==2.32.3
 tensorflow==2.16.1
