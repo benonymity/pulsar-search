@@ -3,10 +3,11 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from pulsars import fetch_pulsar_coordinates
 from PIL import Image, ImageTk, ImageDraw, ImageStat, ImageEnhance
-import cv2
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+
+# import cv2
 
 
 class PulsarSorter:
