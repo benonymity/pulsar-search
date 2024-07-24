@@ -1,13 +1,12 @@
+import io
 import os
+import cv2
+import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pulsars import fetch_pulsar_coordinates
-from PIL import Image, ImageTk, ImageDraw, ImageStat, ImageEnhance
-import numpy as np
+from PIL import Image, ImageTk, ImageDraw
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
-
-# import cv2
 
 
 class PulsarSorter:
@@ -24,7 +23,7 @@ class PulsarSorter:
         self.image_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.info_frame = ttk.Frame(self.window)
-        self.info_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10)
+        self.info_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
 
         self.name_label = ttk.Label(self.info_frame, text="", anchor="w")
         self.name_label.pack(side=tk.TOP, fill=tk.X)
@@ -52,6 +51,20 @@ class PulsarSorter:
 
         self.sort_frame = ttk.Frame(self.info_frame)
         self.sort_frame.pack(side=tk.TOP, fill=tk.X)
+
+        self.default_button = ttk.Button(
+            self.sort_frame,
+            text="Smart Sort",
+            command=lambda: self.sort_pulsars("default"),
+        )
+        self.default_button.pack(side=tk.TOP, fill=tk.X, pady=2)
+
+        self.alphabetical_button = ttk.Button(
+            self.sort_frame,
+            text="Sort Alphabetically",
+            command=lambda: self.sort_pulsars("alphabetical"),
+        )
+        self.alphabetical_button.pack(side=tk.TOP, fill=tk.X, pady=2)
 
         self.brightness_button = ttk.Button(
             self.sort_frame,
@@ -81,12 +94,29 @@ class PulsarSorter:
         )
         self.noise_button.pack(side=tk.TOP, fill=tk.X, pady=2)
 
-        self.default_button = ttk.Button(
+        ttk.Separator(self.sort_frame, orient="horizontal").pack(fill="x", pady=10)
+
+        self.denoise_button = ttk.Button(
             self.sort_frame,
-            text="Smart Sort",
-            command=lambda: self.sort_pulsars("default"),
+            text="Denoise",
+            command=self.denoise,
         )
-        self.default_button.pack(side=tk.TOP, fill=tk.X, pady=2)
+        self.denoise_button.pack(side=tk.TOP, fill=tk.X, pady=2)
+
+        ttk.Separator(self.sort_frame, orient="horizontal").pack(fill="x", pady=10)
+
+        def copy_to_clipboard_with_feedback():
+            self.copy_to_clipboard()
+            original_text = self.copy_button["text"]
+            self.copy_button["text"] = "Copied!"
+            self.window.after(2000, lambda: self.copy_button.config(text=original_text))
+
+        self.copy_button = ttk.Button(
+            self.sort_frame,
+            text="Copy to Clipboard",
+            command=copy_to_clipboard_with_feedback,
+        )
+        self.copy_button.pack(side=tk.TOP, fill=tk.X, pady=2)
 
         self.window.bind("-", self.zoom_out)
         self.window.bind("=", self.zoom_in)
@@ -94,6 +124,14 @@ class PulsarSorter:
         self.window.bind("<Right>", self.show_next_image)
         self.window.bind("<Up>", self.show_previous_pulsar)
         self.window.bind("<Down>", self.show_next_pulsar)
+        if os.name == "posix" and os.uname().sysname == "Darwin":  # macOS
+            self.window.bind(
+                "<Command-c>", lambda event: copy_to_clipboard_with_feedback()
+            )
+        else:  # Windows and other Unix-like systems
+            self.window.bind(
+                "<Control-c>", lambda event: copy_to_clipboard_with_feedback()
+            )
 
         self.pulsar_listbox.bind("<<ListboxSelect>>", self.on_pulsar_selected)
 
@@ -188,6 +226,57 @@ class PulsarSorter:
             },
         )
 
+    def copy_to_clipboard(self):
+        if self.current_images:
+            try:
+                output = io.BytesIO()
+                image, details, hips = self.current_images[self.current_image_index]
+
+                # Apply zoom
+                crop_width = int(image.width / self.current_zoom)
+                crop_height = int(image.height / self.current_zoom)
+                left = (image.width - crop_width) // 2
+                top = (image.height - crop_height) // 2
+                right = left + crop_width
+                bottom = top + crop_height
+                cropped_image = image.crop((left, top, right, bottom))
+                cropped_image = cropped_image.resize((500, 500))
+
+                cropped_image.convert("RGB").save(output, "PNG")
+                data = output.getvalue()
+                output.close()
+
+                if os.name == "posix":  # macOS
+                    import pasteboard
+
+                    pb = pasteboard.Pasteboard()
+                    pb.set_contents(data, pasteboard.PNG)
+                elif os.name == "nt":  # Windows
+                    import win32clipboard
+                    from io import BytesIO
+
+                    output = BytesIO()
+                    cropped_image.convert("RGB").save(output, "BMP")
+                    data = output.getvalue()[14:]
+                    output.close()
+
+                    win32clipboard.OpenClipboard()
+                    win32clipboard.EmptyClipboard()
+                    win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+                    win32clipboard.CloseClipboard()
+                else:
+                    messagebox.showwarning(
+                        "Clipboard Error",
+                        "Clipboard functionality is not supported on this operating system.",
+                    )
+            except ImportError as e:
+                messagebox.showwarning(
+                    "Clipboard Error",
+                    f"Required modules not found: {str(e)}. Please install them to use this feature.",
+                )
+        else:
+            messagebox.showinfo("No Image", "No image is currently selected.")
+
     def sort_pulsars(self, sort_type="default"):
         def sort_key(pulsar):
             if self.current_survey is None:
@@ -217,6 +306,8 @@ class PulsarSorter:
                 )
             elif sort_type == "noise":
                 return (float("inf"), noise) if brightness == 255 else (noise,)
+            elif sort_type == "alphabetical":
+                return (pulsar,)
             else:  # default
                 if noise > 50:
                     return (1, noise, brightness, contrast)
@@ -225,7 +316,10 @@ class PulsarSorter:
                 circle_adjustment = min(num_circles / 10, 0.5)
                 return (0, brightness_score, contrast_score, -circle_adjustment)
 
-        sorted_pulsars = sorted(self.pulsar_attributes.keys(), key=sort_key)
+        if sort_type == "alphabetical":
+            sorted_pulsars = sorted(self.pulsar_attributes.keys())
+        else:
+            sorted_pulsars = sorted(self.pulsar_attributes.keys(), key=sort_key)
         # sorted_pulsars.reverse()
 
         self.pulsar_listbox.delete(0, tk.END)
@@ -283,6 +377,29 @@ class PulsarSorter:
             messagebox.showinfo(
                 "Image Not Found", f"No images found for {self.current_pulsar}"
             )
+
+    def denoise(self):
+        if not self.current_images:
+            return
+
+        image, details, hips = self.current_images[self.current_image_index]
+
+        # Convert PIL Image to OpenCV format (grayscale)
+        cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+
+        # Apply denoising for grayscale image
+        denoised_image = cv2.fastNlMeansDenoising(cv_image, None, 10, 7, 21)
+
+        # Convert back to PIL Image
+        denoised_pil = Image.fromarray(denoised_image)
+
+        # Update the current image in the list
+        self.current_images[self.current_image_index] = (denoised_pil, details, hips)
+
+        # Update the displayed image
+        self.update_image()
+
+        # messagebox.showinfo("Denoising", "Image has been denoised.")
 
     def update_image(self):
         if not self.current_images:

@@ -6,7 +6,6 @@ from PIL import Image
 
 
 class TestPulsarFunctions(unittest.TestCase):
-
     def setUp(self):
         # Common setup for the tests
         self.known_pulsar = "PSR J1821-0331"
@@ -52,7 +51,7 @@ class TestPulsarFunctions(unittest.TestCase):
         self.assertEqual(details["Name"], self.known_pulsar)
         self.assertTrue(
             os.path.exists(
-                f"images/{self.known_pulsar.replace("PSR ", "")}_{self.hips.replace('/', '-')}.jpg"
+                f"images/{self.known_pulsar.replace('PSR ', '')}_{self.hips.replace('/', '-')}.jpg"
             )
         )
         image.close()
