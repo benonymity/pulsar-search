@@ -9,6 +9,8 @@ from sorter import PulsarSorter
 class PulsarDownloader(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.iconphoto(False, tk.PhotoImage(file="icon.png"))
+
         self.title("Pulsar Image Downloader")
         self.geometry("400x320")  # Smaller window size
         self.resizable(False, False)

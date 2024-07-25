@@ -5,7 +5,7 @@ import numpy as np
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pulsars import fetch_pulsar_coordinates
-from PIL import Image, ImageTk, ImageDraw
+from PIL import Image, ImageTk, ImageDraw, ImageEnhance
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -13,11 +13,13 @@ class PulsarSorter:
     def __init__(self, parent):
         self.window = tk.Toplevel(parent)
         self.window.title("Pulsar Viewer")
-        self.window.geometry("840x600")  # Increased width to accommodate new info
+        self.window.geometry("890x660")  # Increased width to accommodate new info
         self.window.resizable(False, False)
+        self.current_images = []
+        self.current_image_index = 0
 
         self.pulsar_listbox = tk.Listbox(self.window, width=15)
-        self.pulsar_listbox.pack(side=tk.LEFT, fill=tk.Y)
+        self.pulsar_listbox.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
         self.image_frame = ttk.Frame(self.window)
         self.image_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -46,6 +48,50 @@ class PulsarSorter:
         self.circles_label.pack(side=tk.TOP, fill=tk.X)
         self.noise_label = ttk.Label(self.info_frame, text="", anchor="w")
         self.noise_label.pack(side=tk.TOP, fill=tk.X)
+
+        ttk.Separator(self.info_frame, orient="horizontal").pack(fill="x", pady=10)
+
+        # Add contrast slider
+        self.contrast_slider = ttk.Scale(
+            self.info_frame,
+            from_=0,
+            to=20,
+            orient=tk.HORIZONTAL,
+            command=self.update_image,
+        )
+        self.contrast_slider.set(10)  # Default contrast
+        ttk.Label(self.info_frame, text="Contrast").pack(side=tk.TOP, fill=tk.X)
+        self.contrast_slider.pack(side=tk.TOP, fill=tk.X, pady=0)
+
+        # Add brightness slider
+        self.brightness_slider = ttk.Scale(
+            self.info_frame,
+            from_=0,
+            to=20,
+            orient=tk.HORIZONTAL,
+            command=self.update_image,
+        )
+        self.brightness_slider.set(10)  # Default brightness
+        ttk.Label(self.info_frame, text="Brightness").pack(side=tk.TOP, fill=tk.X)
+        self.brightness_slider.pack(side=tk.TOP, fill=tk.X, pady=0)
+
+        def update_zoom(value):
+            self.current_zoom = float(value)
+            self.update_image()
+
+        # Add zoom slider
+        self.zoom_slider = ttk.Scale(
+            self.info_frame,
+            from_=1,
+            to=5,
+            orient=tk.HORIZONTAL,
+        )
+        self.zoom_slider.set(1.0)  # Default zoom
+        self.zoom_slider.config(command=update_zoom)
+        ttk.Label(self.info_frame, text="Zoom").pack(side=tk.TOP, fill=tk.X)
+        self.zoom_slider.pack(side=tk.TOP, fill=tk.X, pady=0)
+
+        # Add method to handle zoom changes
 
         ttk.Separator(self.info_frame, orient="horizontal").pack(fill="x", pady=10)
 
@@ -80,12 +126,12 @@ class PulsarSorter:
         )
         self.contrast_button.pack(side=tk.TOP, fill=tk.X, pady=2)
 
-        self.circles_button = ttk.Button(
-            self.sort_frame,
-            text="Sort by Circles",
-            command=lambda: self.sort_pulsars("circles"),
-        )
-        self.circles_button.pack(side=tk.TOP, fill=tk.X, pady=2)
+        # self.circles_button = ttk.Button(
+        #     self.sort_frame,
+        #     text="Sort by Circles",
+        #     command=lambda: self.sort_pulsars("circles"),
+        # )
+        # self.circles_button.pack(side=tk.TOP, fill=tk.X, pady=2)
 
         self.noise_button = ttk.Button(
             self.sort_frame,
@@ -113,7 +159,7 @@ class PulsarSorter:
 
         self.copy_button = ttk.Button(
             self.sort_frame,
-            text="Copy to Clipboard",
+            text="Copy Image",
             command=copy_to_clipboard_with_feedback,
         )
         self.copy_button.pack(side=tk.TOP, fill=tk.X, pady=2)
@@ -137,14 +183,12 @@ class PulsarSorter:
 
         self.current_zoom = 1.0
         self.current_pulsar = None
-        self.current_images = []
-        self.current_image_index = 0
         self.pulsar_image_dict = self.create_pulsar_image_dict()
-        self.current_survey = None
+        self.current_survey = "CDS/P/VPHAS/DR4/Halpha"
         self.pulsar_attributes = {}
-
         self.populate_listbox()
         self.calculate_all_pulsar_attributes()
+        self.load_pulsar_images()
 
         # Center the window
         parent.eval(f"tk::PlaceWindow {str(self.window)} center")
@@ -196,18 +240,6 @@ class PulsarSorter:
         # Calculate contrast
         contrast = np.std(img_array)
 
-        # Detect circles
-        circles = None
-        # img_gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
-        # circles = cv2.HoughCircles(
-        #     img_gray,
-        #     cv2.HOUGH_GRADIENT,
-        #     1,
-        #     20,
-        #     minRadius=10,
-        # )
-        num_circles = 0 if circles is None else len(circles[0])
-
         # Calculate noise from a random 100x100 spot
         h, w = img_array.shape[:2]
         x = np.random.randint(0, w - 200)
@@ -221,7 +253,7 @@ class PulsarSorter:
             {
                 "brightness": brightness,
                 "contrast": contrast,
-                "num_circles": num_circles,
+                "num_circles": None,
                 "noise": noise,
             },
         )
@@ -313,8 +345,7 @@ class PulsarSorter:
                     return (1, noise, brightness, contrast)
                 brightness_score = brightness
                 contrast_score = contrast
-                circle_adjustment = min(num_circles / 10, 0.5)
-                return (0, brightness_score, contrast_score, -circle_adjustment)
+                return (0, brightness_score, contrast_score, 0)
 
         if sort_type == "alphabetical":
             sorted_pulsars = sorted(self.pulsar_attributes.keys())
@@ -384,25 +415,24 @@ class PulsarSorter:
 
         image, details, hips = self.current_images[self.current_image_index]
 
-        # Convert PIL Image to OpenCV format (grayscale)
-        cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+        try:
 
-        # Apply denoising for grayscale image
-        denoised_image = cv2.fastNlMeansDenoising(cv_image, None, 10, 7, 21)
+            # Convert PIL Image to OpenCV format (grayscale)
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+            denoised_image = cv2.fastNlMeansDenoising(cv_image, None, 10, 7, 21)
+            denoised_pil = Image.fromarray(denoised_image)
+            self.current_images[self.current_image_index] = (
+                denoised_pil,
+                details,
+                hips,
+            )
 
-        # Convert back to PIL Image
-        denoised_pil = Image.fromarray(denoised_image)
+            self.update_image()
+        except:
+            pass
 
-        # Update the current image in the list
-        self.current_images[self.current_image_index] = (denoised_pil, details, hips)
-
-        # Update the displayed image
-        self.update_image()
-
-        # messagebox.showinfo("Denoising", "Image has been denoised.")
-
-    def update_image(self):
-        if not self.current_images:
+    def update_image(self, contrast_value=None):
+        if len(self.current_images) == 0:
             return
 
         image, details, hips = self.current_images[self.current_image_index]
@@ -419,6 +449,20 @@ class PulsarSorter:
         attributes = self.pulsar_attributes[self.current_pulsar][hips]
         self.brightness_label.config(text=f"Brightness: {attributes['brightness']:.2f}")
         self.contrast_label.config(text=f"Contrast: {attributes['contrast']:.2f}")
+
+        if not attributes["num_circles"]:
+            # circles = None
+            # img_gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+            # circles = cv2.HoughCircles(
+            #     img_gray,
+            #     cv2.HOUGH_GRADIENT,
+            #     1,
+            #     20,
+            #     minRadius=10,
+            # )
+            # num_circles = 0 if circles is None else len(circles[0])
+            attributes["num_circles"] = 0
+
         self.circles_label.config(text=f"Detected Circles: {attributes['num_circles']}")
         self.noise_label.config(text=f"Noise: {attributes['noise']:.2f}")
 
@@ -431,7 +475,15 @@ class PulsarSorter:
         bottom = top + crop_height
 
         cropped_image = image.crop((left, top, right, bottom))
-        cropped_image = cropped_image.resize((500, 500))
+        cropped_image = cropped_image.resize((550, 550))
+
+        # Adjust contrast
+        contrast_value = self.contrast_slider.get() / 10
+        brightness_value = self.brightness_slider.get() / 10
+        contrast = ImageEnhance.Contrast(cropped_image)
+        cropped_image = contrast.enhance(contrast_value)
+        brightness = ImageEnhance.Brightness(cropped_image)
+        cropped_image = brightness.enhance(brightness_value)
 
         # Create a new square image with rounded corners on all sides
         size = min(cropped_image.width, cropped_image.height)
@@ -460,7 +512,7 @@ class PulsarSorter:
 
         image_label = ttk.Label(self.image_frame, image=photo)
         image_label.image = photo
-        image_label.pack(side=tk.TOP, padx=10, pady=10)
+        image_label.pack(side=tk.TOP, pady=10)
 
         hips_label = ttk.Label(self.image_frame, text=f"Survey: {hips}")
         hips_label.pack(side=tk.TOP, pady=(0, 10))
@@ -507,29 +559,32 @@ class PulsarSorter:
 
     def update_button_states(self):
         if hasattr(self, "prev_button"):
-            self.prev_button.config(
-                state=tk.NORMAL if self.current_image_index > 0 else tk.DISABLED
+            self.prev_button["state"] = (
+                "normal" if self.current_image_index > 0 else "disabled"
             )
         if hasattr(self, "next_button"):
-            self.next_button.config(
-                state=(
-                    tk.NORMAL
-                    if self.current_image_index < len(self.current_images) - 1
-                    else tk.DISABLED
-                )
+            self.next_button["state"] = (
+                "normal"
+                if self.current_image_index < len(self.current_images) - 1
+                else "disabled"
             )
 
     def zoom_in(self, event):
-        self.current_zoom *= 1.25
+        if self.current_zoom < 10:
+            self.current_zoom *= 1.25
+            self.zoom_slider.set(self.current_zoom)
         self.update_image()
 
     def zoom_out(self, event):
         if self.current_zoom > 1:
             self.current_zoom /= 1.25
+            self.zoom_slider.set(self.current_zoom)
         self.update_image()
 
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.iconphoto(False, tk.PhotoImage(file="icon.png"))
+    root.withdraw()  # Hide the root window
     app = PulsarSorter(root)
-    root.mainloop()
+    app.window.mainloop()
