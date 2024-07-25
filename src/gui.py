@@ -4,6 +4,7 @@ import threading
 import subprocess
 from pulsars import list_pulsars, save_pulsar
 from sorter import PulsarSorter
+import numpy as np
 
 
 class PulsarDownloader(tk.Tk):
