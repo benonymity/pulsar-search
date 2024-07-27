@@ -18,6 +18,7 @@ a = Analysis(
 pyz = PYZ(a.pure)
 
 if sys.platform == "win32":
+    os.system("pip3 install win32clipboard")
     splash = Splash(
         'splash.png',
         binaries=a.binaries,
@@ -79,6 +80,7 @@ elif sys.platform == "linux" or sys.platform == "linux2":
     os.system("chmod +x dist/pulsar_search")
 
 elif sys.platform == "darwin":
+    os.system("pip3 install pasteboard")
     exe = EXE(
         pyz,
         a.scripts,
