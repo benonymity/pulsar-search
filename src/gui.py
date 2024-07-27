@@ -13,7 +13,7 @@ class PulsarDownloader(tk.Tk):
         self.iconphoto(False, tk.PhotoImage(file="icon.png"))
 
         self.title("Pulsar Image Downloader")
-        self.geometry("400x320")  # Smaller window size
+        self.geometry("400x380")  # Smaller window size
         self.resizable(False, False)
 
         # Settings Frame
@@ -50,6 +50,7 @@ class PulsarDownloader(tk.Tk):
             "min_gb": tk.StringVar(value="-5"),
             "min_year": tk.StringVar(value="2012"),
             "max_error": tk.StringVar(value="1"),
+            "pulsar_name": tk.StringVar(value=""),
         }
         for key, var in self.pulsar_options.items():
             frame = ttk.Frame(settings_frame)
@@ -58,6 +59,15 @@ class PulsarDownloader(tk.Tk):
             label.pack(side=tk.LEFT)
             entry = ttk.Entry(frame, textvariable=var)
             entry.pack(side=tk.LEFT)
+
+        # FOV Entry
+        fov_frame = ttk.Frame(settings_frame)
+        fov_frame.pack(side=tk.TOP)
+        fov_label = ttk.Label(fov_frame, text="FOV (arcmin):")
+        fov_label.pack(side=tk.LEFT)
+        self.fov = tk.StringVar(value="1")
+        fov_entry = ttk.Entry(fov_frame, textvariable=self.fov)
+        fov_entry.pack(side=tk.LEFT)
 
         # Button Frame
         button_frame = ttk.Frame(self)
@@ -115,22 +125,31 @@ class PulsarDownloader(tk.Tk):
         self.sort_button.config(state=tk.DISABLED)
 
     def download_thread_func(self):
-        pulsar_options = {
-            key: float(value.get()) for key, value in self.pulsar_options.items()
-        }
+        pulsar_options = {}
+        for key, value in self.pulsar_options.items():
+            try:
+                if key == "pulsar_name":
+                    pulsar_options[key] = value.get()
+                else:
+                    pulsar_options[key] = float(value.get())
+            except ValueError:
+                # Handle empty string or invalid input
+                pulsar_options[key] = None
         pulsars = list_pulsars(pulsar_options)
         total_pulsars = len(pulsars)
         if self.selected_hips.get() == "All":
             total_pulsars *= 5
-            self.progress["maximum"] = total_pulsars * 5
-        else:
-            self.progress["maximum"] = total_pulsars
+        self.progress["maximum"] = total_pulsars
 
         for i, pulsar in enumerate(pulsars):
             if not self.downloading:
                 break
             if self.selected_hips.get() != "All":
-                save_pulsar(pulsar, self.hips_options[self.selected_hips.get()])
+                save_pulsar(
+                    pulsar,
+                    self.hips_options[self.selected_hips.get()],
+                    self.fov.get(),
+                )
                 if self.downloading:
                     self.progress["value"] = i + 1
                     self.progress_label_text.set(f"{i + 1}/{total_pulsars}")
@@ -138,7 +157,11 @@ class PulsarDownloader(tk.Tk):
             else:
                 for hips_option in self.hips_options.values():
                     if hips_option != "ALL":
-                        save_pulsar(pulsar, hips_option)
+                        save_pulsar(
+                            pulsar,
+                            hips_option,
+                            self.fov.get(),
+                        )
                         if self.downloading:
                             self.progress["value"] += 1
                             self.progress_label_text.set(

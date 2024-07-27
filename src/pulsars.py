@@ -1,4 +1,5 @@
 import os
+import io
 import requests
 import warnings
 import astropy.units as u
@@ -25,13 +26,27 @@ def fetch_pulsar_coordinates(pulsar_name):
 
 def list_pulsars(options):
     pulsars = []
-    max_dec = options["max_dec"]
-    min_dec = options["min_dec"]
-    max_gb = options["max_gb"]
-    min_gb = options["min_gb"]
-    min_date = options["min_year"]
-    max_error = options["max_error"]
-    url = f"https://www.atnf.csiro.au/research/pulsar/psrcat/proc_form.php?version=2.1.1&Name=Name&sort_attr=jname&sort_order=asc&condition=DecJ+%3C+{max_dec}+%26%26+DecJ+%3E+{min_dec}+%26%26+GB+%3C+{max_gb}+%26%26+GB+%3E+{min_gb}+%26%26+Date%3E{min_date}+%26%26+error%28DecJ%29+%3C+{max_error}&state=query&table_bottom.x=45&table_bottom.y=2"
+    conditions = []
+
+    if "max_dec" in options and options["max_dec"] is not None:
+        conditions.append(f"DecJ+%3C+{options['max_dec']}")
+    if "min_dec" in options and options["min_dec"] is not None:
+        conditions.append(f"DecJ+%3E+{options['min_dec']}")
+    if "max_gb" in options and options["max_gb"] is not None:
+        conditions.append(f"GB+%3C+{options['max_gb']}")
+    if "min_gb" in options and options["min_gb"] is not None:
+        conditions.append(f"GB+%3E+{options['min_gb']}")
+    if "min_year" in options and options["min_year"] is not None:
+        conditions.append(f"Date%3E{options['min_year']}")
+    if "max_error" in options and options["max_error"] is not None:
+        conditions.append(f"error%28DecJ%29+%3C+{options['max_error']}")
+
+    condition_string = "+%26%26+".join(conditions)
+
+    if "pulsar_name" in options and options["pulsar_name"] != "":
+        condition_string += f"+&&+pulsar_names=+{options['pulsar_name']}"
+
+    url = f"https://www.atnf.csiro.au/research/pulsar/psrcat/proc_form.php?version=2.1.1&Name=Name&sort_attr=jname&sort_order=asc&condition={condition_string}&state=query&table_bottom.x=45&table_bottom.y=2"
     response = requests.get(url).text
     list = response.split("<pre>")[1].split("</pre>")[0]
 
@@ -43,12 +58,11 @@ def list_pulsars(options):
                 pass
 
     pulsars.pop(0)
-    pulsars.pop(0)
 
     return pulsars
 
 
-def save_pulsar(pulsar_name, hips):
+def save_pulsar(pulsar_name, hips, fov=1):
     pulsar_name = "PSR " + pulsar_name
     try:
         coordinates = fetch_pulsar_coordinates(pulsar_name)
@@ -66,29 +80,36 @@ def save_pulsar(pulsar_name, hips):
             f"{pulsar_name.replace('PSR ', '')}_{hips.replace('/', '-')}.jpg",
         )
 
-        if not os.path.exists(image_path):
-            # Prepare API request
-            query_params = {
-                "hips": hips,
-                "format": "jpg",
-                "ra": coordinates.ra.deg[0],
-                "dec": coordinates.dec.deg[0],
-                "fov": (1 * u.arcmin).to(u.deg).value,
-                "width": 500,
-                "height": 500,
-            }
+        # Prepare API request
+        query_params = {
+            "hips": hips,
+            "format": "jpg",
+            "ra": coordinates.ra.deg[0],
+            "dec": coordinates.dec.deg[0],
+            "fov": (int(fov) * u.arcmin).to(u.deg).value,
+            "width": 500,
+            "height": 500,
+        }
 
-            url = f"http://alasky.u-strasbg.fr/hips-image-services/hips2fits?{urlencode(query_params)}"
-            response = requests.get(url)
-            response.raise_for_status()  # Raises an HTTPError for bad responses
+        url = f"http://alasky.u-strasbg.fr/hips-image-services/hips2fits?{urlencode(query_params)}"
+        response = requests.get(url)
+        response.raise_for_status()  # Raises an HTTPError for bad responses
 
-            # Save the image
-            os.makedirs(image_folder, exist_ok=True)
-            with open(image_path, "wb") as f:
-                f.write(response.content)
+        # Save the image
+        os.makedirs(image_folder, exist_ok=True)
+
+        # Check if the response content is pure white
+        image = Image.open(io.BytesIO(response.content))
+        print(image.getextrema())
+        if image.getextrema() == ((255, 255), (255, 255), (255, 255)):
+            print(f"Skipping pure white image: {image_path}")
+            return
+
+        with open(image_path, "wb") as f:
+            f.write(response.content)
 
     except Exception as e:
-        debug = False
+        debug = True
         if debug:
             print(f"Failed to download image: {e}")
 

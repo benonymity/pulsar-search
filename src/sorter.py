@@ -180,6 +180,7 @@ class PulsarSorter:
             )
 
         self.pulsar_listbox.bind("<<ListboxSelect>>", self.on_pulsar_selected)
+        self.window.bind("<Motion>", self.on_mouse_move)
 
         self.current_zoom = 1.0
         self.current_pulsar = None
@@ -451,16 +452,6 @@ class PulsarSorter:
         self.contrast_label.config(text=f"Contrast: {attributes['contrast']:.2f}")
 
         if not attributes["num_circles"]:
-            # circles = None
-            # img_gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
-            # circles = cv2.HoughCircles(
-            #     img_gray,
-            #     cv2.HOUGH_GRADIENT,
-            #     1,
-            #     20,
-            #     minRadius=10,
-            # )
-            # num_circles = 0 if circles is None else len(circles[0])
             attributes["num_circles"] = 0
 
         self.circles_label.config(text=f"Detected Circles: {attributes['num_circles']}")
@@ -497,6 +488,7 @@ class PulsarSorter:
 
         # Draw crosshair on the rounded image
         draw = ImageDraw.Draw(rounded_image)
+        self.rounded_image = rounded_image
         center_x, center_y = rounded_image.width // 2, rounded_image.height // 2
         draw.line(
             [(center_x - 10, center_y), (center_x + 10, center_y)], fill="red", width=1
@@ -532,6 +524,27 @@ class PulsarSorter:
             self.next_button.pack(side=tk.LEFT, padx=5)
 
         self.update_button_states()
+
+    def on_mouse_move(self, event):
+        if not hasattr(self, "rounded_image"):
+            return
+
+        x, y = event.x, event.y
+        image_width, image_height = self.rounded_image.size
+
+        if 0 <= x < image_width and 0 <= y < image_height:
+            r, g, b, _ = self.rounded_image.getpixel((x, y))
+            if not hasattr(self, "rgb_label"):
+                self.rgb_label = ttk.Label(self.image_frame, text="")
+                self.rgb_label.pack()
+            self.rgb_label.config(text=f"RGB: ({r}, {g}, {b})")
+            self.rgb_label.place(
+                x=event.x_root - self.image_frame.winfo_rootx() + 10,
+                y=event.y_root - self.image_frame.winfo_rooty() + 10,
+            )
+        else:
+            if hasattr(self, "rgb_label"):
+                self.rgb_label.place_forget()
 
     def show_previous_image(self, event=None):
         if self.current_image_index > 0:

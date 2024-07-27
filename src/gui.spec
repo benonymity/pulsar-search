@@ -24,6 +24,7 @@ if sys.platform == "win32":
         datas=a.datas,
         text_pos=(10, 30),
         text_size=12,
+        text_color='white',
         minify_script=True,
         always_on_top=True,
     )
