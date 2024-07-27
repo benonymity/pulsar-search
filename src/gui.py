@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-import threading
+import concurrent.futures
 import subprocess
 from pulsars import list_pulsars, save_pulsar
 from sorter import PulsarSorter
@@ -114,8 +114,9 @@ class PulsarDownloader(tk.Tk):
             self.progress["value"] = 0
             self.sort_button.config(state=tk.DISABLED)
 
-            self.download_thread = threading.Thread(target=self.download_thread_func)
-            self.download_thread.start()
+            self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+            self.future = self.executor.submit(self.download_thread_func)
+            self.check_future()
 
     def stop_download(self):
         self.download_button.config(text="Download Images", command=self.start_download)
@@ -123,6 +124,18 @@ class PulsarDownloader(tk.Tk):
         self.progress["value"] = 0
         self.progress_label_text.set("-/-")
         self.sort_button.config(state=tk.DISABLED)
+        if hasattr(self, "executor"):
+            self.executor.shutdown(wait=False)
+
+    def check_future(self):
+        if self.future.done():
+            self.download_button.config(
+                text="Download Images", command=self.start_download
+            )
+            self.downloading = False
+            self.sort_button.config(state=tk.NORMAL)
+        else:
+            self.after(100, self.check_future)
 
     def download_thread_func(self):
         pulsar_options = {}
@@ -168,10 +181,6 @@ class PulsarDownloader(tk.Tk):
                                 f"{self.progress['value']}/{total_pulsars}"
                             )
                             self.update_idletasks()  # Update the GUI
-
-        self.download_button.config(text="Download Images", command=self.start_download)
-        self.downloading = False
-        self.sort_button.config(state=tk.NORMAL)
 
     def open_sorter(self):
         sorter_window = PulsarSorter(self)  # Pass self as the parent window

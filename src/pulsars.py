@@ -100,7 +100,6 @@ def save_pulsar(pulsar_name, hips, fov=1):
 
         # Check if the response content is pure white
         image = Image.open(io.BytesIO(response.content))
-        print(image.getextrema())
         if image.getextrema() == ((255, 255), (255, 255), (255, 255)):
             print(f"Skipping pure white image: {image_path}")
             return

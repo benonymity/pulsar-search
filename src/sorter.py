@@ -6,7 +6,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from pulsars import fetch_pulsar_coordinates
 from PIL import Image, ImageTk, ImageDraw, ImageEnhance
-from concurrent.futures import ThreadPoolExecutor
 
 
 class PulsarSorter:
@@ -212,22 +211,16 @@ class PulsarSorter:
             self.pulsar_listbox.insert(tk.END, pulsar)
 
     def calculate_all_pulsar_attributes(self):
-        with ThreadPoolExecutor() as executor:
-            futures = []
-            for pulsar, surveys in self.pulsar_image_dict.items():
-                for survey, image_file in surveys.items():
-                    image_path = os.path.join("images", image_file)
-                    if os.path.exists(image_path):
-                        future = executor.submit(
-                            self.calculate_image_attributes, pulsar, survey, image_path
-                        )
-                        futures.append(future)
-
-            for future in futures:
-                pulsar, survey, attributes = future.result()
-                if pulsar not in self.pulsar_attributes:
-                    self.pulsar_attributes[pulsar] = {}
-                self.pulsar_attributes[pulsar][survey] = attributes
+        for pulsar, surveys in self.pulsar_image_dict.items():
+            for survey, image_file in surveys.items():
+                image_path = os.path.join("images", image_file)
+                if os.path.exists(image_path):
+                    pulsar, survey, attributes = self.calculate_image_attributes(
+                        pulsar, survey, image_path
+                    )
+                    if pulsar not in self.pulsar_attributes:
+                        self.pulsar_attributes[pulsar] = {}
+                    self.pulsar_attributes[pulsar][survey] = attributes
 
         self.sort_pulsars()
 
