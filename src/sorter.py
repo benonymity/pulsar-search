@@ -530,13 +530,26 @@ class PulsarSorter:
             if not hasattr(self, "rgb_label"):
                 self.rgb_label = ttk.Label(self.image_frame, text="")
                 self.rgb_label.pack()
-            self.rgb_label.config(text=f"RGB: ({r}, {g}, {b})")
-            self.rgb_label.place(
-                x=event.x_root - self.image_frame.winfo_rootx() + 10,
-                y=event.y_root - self.image_frame.winfo_rooty() + 10,
-            )
+            if self.rgb_label.winfo_exists():
+                self.rgb_label.config(text=f"RGB: ({r}, {g}, {b})")
+                self.rgb_label.place(
+                    x=event.x_root - self.image_frame.winfo_rootx() + 10,
+                    y=event.y_root - self.image_frame.winfo_rooty() + 10,
+                )
+                self.rgb_label.lift()  # Ensure the label is on top
+            else:
+                self.rgb_label = ttk.Label(
+                    self.image_frame, text=f"RGB: ({r}, {g}, {b})"
+                )
+                self.rgb_label.place(
+                    x=event.x_root - self.image_frame.winfo_rootx() + 10,
+                    y=event.y_root - self.image_frame.winfo_rooty() + 10,
+                )
+                self.rgb_label.lift()  # Ensure the label is on top
+
         else:
             if hasattr(self, "rgb_label"):
+                self.rgb_label.config(text="")
                 self.rgb_label.place_forget()
 
     def show_previous_image(self, event=None):
@@ -551,24 +564,30 @@ class PulsarSorter:
 
     def show_previous_pulsar(self, event=None):
         current_index = self.pulsar_listbox.curselection()[0]
+        self.pulsar_listbox.focus_set()
         if current_index > 0:
             self.pulsar_listbox.selection_clear(0, tk.END)
-            self.pulsar_listbox.selection_set(current_index - 1)
+            self.pulsar_listbox.selection_set(current_index)
             self.pulsar_listbox.event_generate("<<ListboxSelect>>")
 
     def show_next_pulsar(self, event=None):
         current_index = self.pulsar_listbox.curselection()[0]
-        if current_index < self.pulsar_listbox.size() - 1:
+        self.pulsar_listbox.focus_set()
+        if current_index == 0:
             self.pulsar_listbox.selection_clear(0, tk.END)
-            self.pulsar_listbox.selection_set(current_index + 1)
+            self.pulsar_listbox.selection_set(1)
+            self.pulsar_listbox.event_generate("<<ListboxSelect>>")
+        elif current_index < self.pulsar_listbox.size() - 1:
+            self.pulsar_listbox.selection_clear(0, tk.END)
+            self.pulsar_listbox.selection_set(current_index)
             self.pulsar_listbox.event_generate("<<ListboxSelect>>")
 
     def update_button_states(self):
-        if hasattr(self, "prev_button"):
+        if hasattr(self, "prev_button") and self.prev_button.winfo_exists():
             self.prev_button["state"] = (
                 "normal" if self.current_image_index > 0 else "disabled"
             )
-        if hasattr(self, "next_button"):
+        if hasattr(self, "next_button") and self.next_button.winfo_exists():
             self.next_button["state"] = (
                 "normal"
                 if self.current_image_index < len(self.current_images) - 1

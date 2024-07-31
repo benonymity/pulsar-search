@@ -2,13 +2,14 @@
 
 import os
 import sys
+# import pkg_resources.py2_warn
 
 a = Analysis(
     ['gui.py'],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=['numpy.random.common', 'numpy.random.bounded_integers', 'numpy.random.entropy', 'pkg_resources.py2_warn', 'dependency_injector.errors', 'six'],
+    hiddenimports=['numpy.random.common', 'numpy.random.bounded_integers', 'numpy.random.entropy', 'pkg_resources.py2_warn', 'dependency_injector.errors'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
