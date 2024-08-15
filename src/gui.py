@@ -27,6 +27,7 @@ class PulsarDownloader(tk.Tk):
         self.hips_options = {
             "All": "ALL",
             "VPHAS": "CDS/P/VPHAS/DR4/Halpha",
+            "VPHAS": "CDS/P/VPHAS/DR4/Halpha+",
             "IPHAS": "CDS/P/IPHAS/DR2/halpha",
             "SHS": "CDS/P/SHS/",
             "WISE 12um": "CDS/P/allWISE/W3",

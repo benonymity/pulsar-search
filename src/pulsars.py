@@ -44,7 +44,8 @@ def list_pulsars(options):
     condition_string = "+%26%26+".join(conditions)
 
     if "pulsar_name" in options and options["pulsar_name"] != "":
-        condition_string += f"+&&+pulsar_names=+{options['pulsar_name']}"
+        pulsar_name = options["pulsar_name"].replace("+", "%2B")
+        condition_string += f"+&&+pulsar_names=+{pulsar_name}"
 
     url = f"https://www.atnf.csiro.au/research/pulsar/psrcat/proc_form.php?version=2.1.1&Name=Name&sort_attr=jname&sort_order=asc&condition={condition_string}&state=query&table_bottom.x=45&table_bottom.y=2"
     response = requests.get(url).text
@@ -92,6 +93,7 @@ def save_pulsar(pulsar_name, hips, fov=1):
         }
 
         url = f"http://alasky.u-strasbg.fr/hips-image-services/hips2fits?{urlencode(query_params)}"
+        print(url)
         response = requests.get(url)
         response.raise_for_status()  # Raises an HTTPError for bad responses
 

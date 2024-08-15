@@ -6,13 +6,16 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from pulsars import fetch_pulsar_coordinates
 from PIL import Image, ImageTk, ImageDraw, ImageEnhance
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.widgets import Slider
 
 
 class PulsarSorter:
     def __init__(self, parent):
         self.window = tk.Toplevel(parent)
         self.window.title("Pulsar Viewer")
-        self.window.geometry("890x660")  # Increased width to accommodate new info
+        self.window.geometry("890x690")  # Increased width to accommodate new info
         self.window.resizable(False, False)
         self.current_images = []
         self.current_image_index = 0
@@ -90,8 +93,6 @@ class PulsarSorter:
         ttk.Label(self.info_frame, text="Zoom").pack(side=tk.TOP, fill=tk.X)
         self.zoom_slider.pack(side=tk.TOP, fill=tk.X, pady=0)
 
-        # Add method to handle zoom changes
-
         ttk.Separator(self.info_frame, orient="horizontal").pack(fill="x", pady=10)
 
         self.sort_frame = ttk.Frame(self.info_frame)
@@ -125,13 +126,6 @@ class PulsarSorter:
         )
         self.contrast_button.pack(side=tk.TOP, fill=tk.X, pady=2)
 
-        # self.circles_button = ttk.Button(
-        #     self.sort_frame,
-        #     text="Sort by Circles",
-        #     command=lambda: self.sort_pulsars("circles"),
-        # )
-        # self.circles_button.pack(side=tk.TOP, fill=tk.X, pady=2)
-
         self.noise_button = ttk.Button(
             self.sort_frame,
             text="Sort by Noise",
@@ -163,6 +157,14 @@ class PulsarSorter:
         )
         self.copy_button.pack(side=tk.TOP, fill=tk.X, pady=2)
 
+        # Add settings button
+        self.settings_button = ttk.Button(
+            self.sort_frame,
+            text="Combine Images",
+            command=self.open_settings,
+        )
+        self.settings_button.pack(side=tk.TOP, fill=tk.X, pady=2)
+
         self.window.bind("-", self.zoom_out)
         self.window.bind("=", self.zoom_in)
         self.window.bind("<Left>", self.show_previous_image)
@@ -190,8 +192,105 @@ class PulsarSorter:
         self.calculate_all_pulsar_attributes()
         self.load_pulsar_images()
 
+        # Initialize matplotlib figure and axes
+        # self.fig, self.ax = plt.subplots(figsize=(5.5, 5.5))
+        # self.canvas = FigureCanvasTkAgg(self.fig, master=self.image_frame)
+        # self.canvas_widget = self.canvas.get_tk_widget()
+        # self.canvas_widget.pack(side=tk.TOP, pady=10)
+
+        # Initialize survey offsets
+        self.survey_offsets = {
+            survey: 0 for survey in self.pulsar_image_dict[self.current_pulsar].keys()
+        }
+
         # Center the window
         parent.eval(f"tk::PlaceWindow {str(self.window)} center")
+
+    def open_settings(self):
+        settings_window = tk.Toplevel(self.window)
+        settings_window.title("Combine Images")
+        settings_window.geometry("800x610")
+
+        self.survey_offsets = {
+            survey: self.survey_offsets.get(survey, 0)
+            for survey in self.pulsar_image_dict[self.current_pulsar].keys()
+        }
+
+        # Create a frame for sliders
+        slider_frame = ttk.Frame(settings_window)
+        slider_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+        # Create sliders for each survey
+        self.survey_sliders = {}
+        for survey in self.survey_offsets.keys():
+            slider_label = ttk.Label(slider_frame, text=survey)
+            slider_label.pack(side=tk.TOP, pady=(10, 0))
+
+            slider = ttk.Scale(
+                slider_frame,
+                from_=-100,
+                to=100,
+                orient=tk.HORIZONTAL,
+                length=200,
+                value=self.survey_offsets[survey],
+                command=lambda val, s=survey: self.update_survey_offset(s, float(val)),
+            )
+            slider.pack(side=tk.TOP)
+            self.survey_sliders[survey] = slider
+
+        # Create a frame for the image
+        self.settings_image_frame = ttk.Frame(settings_window)
+        self.settings_image_frame.pack(
+            side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10
+        )
+
+        # Add a "Done" button
+        done_button = ttk.Button(
+            slider_frame, text="Done", command=settings_window.destroy
+        )
+        done_button.pack(side=tk.BOTTOM, pady=10)
+
+        # Add apply to viewer checkbox
+        self.apply_to_viewer_var = tk.BooleanVar()
+        apply_to_viewer_checkbox = ttk.Checkbutton(
+            slider_frame,
+            text="Apply to Viewer",
+            variable=self.apply_to_viewer_var,
+            command=self.update_image,
+        )
+        apply_to_viewer_checkbox.pack(side=tk.BOTTOM, pady=10)
+
+        # Initialize with the combined image
+        self.combined_image = self.create_combined_image()
+        self.settings_image_label = ttk.Label(self.settings_image_frame)
+        self.settings_image_label.pack(fill=tk.BOTH, expand=True)
+        self.update_combined_image()
+
+    def create_combined_image(self):
+        combined_image = np.zeros_like(
+            self.load_survey_image(list(self.survey_offsets.keys())[0]), dtype=float
+        )
+        for survey, offset in self.survey_offsets.items():
+            img = self.load_survey_image(survey)
+            combined_image += (offset / 100) * img
+        return np.clip(combined_image, 0, 255).astype(np.uint8)
+
+    def update_combined_image(self):
+        self.combined_image = self.create_combined_image()
+        img = Image.fromarray(self.combined_image)
+        img = img.resize((550, 550))  # Resize the image to fit the window
+        img = ImageTk.PhotoImage(img)
+        self.settings_image_label.configure(image=img)
+        self.settings_image_label.image = img
+
+    def load_survey_image(self, survey):
+        image_file = self.pulsar_image_dict[self.current_pulsar][survey]
+        image_path = os.path.join("images", image_file)
+        return np.array(Image.open(image_path))
+
+    def update_survey_offset(self, survey, value):
+        self.survey_offsets[survey] = value
+        self.update_combined_image()
 
     def create_pulsar_image_dict(self):
         pulsar_image_dict = {}
@@ -458,7 +557,19 @@ class PulsarSorter:
         right = left + crop_width
         bottom = top + crop_height
 
-        cropped_image = image.crop((left, top, right, bottom))
+        if hasattr(self, "apply_to_viewer_var") and self.apply_to_viewer_var.get():
+            # Create a combined image using survey offsets
+            combined_image = np.zeros_like(np.array(image), dtype=float)
+            for survey, offset in self.survey_offsets.items():
+                survey_image = self.load_survey_image(survey)
+                combined_image += (offset / 100) * survey_image
+            combined_image = np.clip(combined_image, 0, 255).astype(np.uint8)
+            cropped_image = Image.fromarray(combined_image).crop(
+                (left, top, right, bottom)
+            )
+        else:
+            cropped_image = image.crop((left, top, right, bottom))
+
         cropped_image = cropped_image.resize((550, 550))
 
         # Adjust contrast
@@ -502,7 +613,7 @@ class PulsarSorter:
         hips_label = ttk.Label(self.image_frame, text=f"Survey: {hips}")
         hips_label.pack(side=tk.TOP, pady=(0, 10))
 
-        if len(self.current_images) > 1:
+        if len(self.current_images) > 1 and not self.apply_to_viewer_var.get():
             nav_frame = ttk.Frame(self.image_frame)
             nav_frame.pack(side=tk.TOP, pady=(0, 0))
 

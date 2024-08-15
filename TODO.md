@@ -1,10 +1,21 @@
 # TODO
 
-- [ ] Make circle detection efficient
-- [ ] Make the neural net more practical
+- [ ] Make circle detection either faster or lazier
 - [ ] Generate fake bowshocks for training
+- [ ] Losing focus on some MacOS versions
+- [ ] Make the neural net more practical
+- [ ] Add note-taking abiilities
+- [ ] Smart filter subtraction
+  - Convert to photons per second
+  - Find relative bandwidth difference
+  - Use as fraction, then subtract
+  - Use J2030+4415 as reference
+  - Find southern hemispheric pulsars in brownsburger and romani, test on vphas and iphas
 - [ ] Refactor GUI stuff
+- [ ] Add resizing
+- [x] Squash constant Tk configure errors
 - [x] Adjust contrast
 - [x] Adjust brightness
 - [x] Display RGB values on hover
 - [x] Download individual pulsars
+- [x] Fix arrow key bugs
