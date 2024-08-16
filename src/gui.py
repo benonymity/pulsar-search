@@ -25,11 +25,12 @@ class PulsarDownloader(tk.Tk):
         hips_label.pack(side=tk.TOP)
 
         self.hips_options = {
-            "All": "ALL",
+            "All": "CDS/P/VPHAS/DR4/Halpha,CDS/P/VPHAS/DR4/Halpha+,CDS/P/IPHAS/DR2/halpha,CDS/P/SHS/,CDS/P/allWISE/W3,CDS/P/allWISE/W4",
             "VPHAS": "CDS/P/VPHAS/DR4/Halpha",
-            "VPHAS": "CDS/P/VPHAS/DR4/Halpha+",
+            "All VPHAS": "CDS/P/VPHAS/DR4/Halpha,CDS/P/VPHAS/DR4/i,CDS/P/VPHAS/DR4/r",
             "IPHAS": "CDS/P/IPHAS/DR2/halpha",
-            "SHS": "CDS/P/SHS/",
+            "All IPHAS": "CDS/P/IPHAS/DR2/halpha,CDS/P/IPHAS/DR2/i,CDS/P/IPHAS/DR2/r",
+            "SHS": "CDS/P/SHS",
             "WISE 12um": "CDS/P/allWISE/W3",
             "WISE 22um": "CDS/P/allWISE/W4",
         }
@@ -113,7 +114,7 @@ class PulsarDownloader(tk.Tk):
                 text="Stop Download", command=self.stop_download
             )
             self.progress["value"] = 0
-            self.sort_button.config(state=tk.DISABLED)
+            # self.sort_button.config(state=tk.DISABLED)
 
             self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             self.future = self.executor.submit(self.download_thread_func)
@@ -124,7 +125,7 @@ class PulsarDownloader(tk.Tk):
         self.downloading = False
         self.progress["value"] = 0
         self.progress_label_text.set("-/-")
-        self.sort_button.config(state=tk.DISABLED)
+        # self.sort_button.config(state=tk.DISABLED)
         if hasattr(self, "executor"):
             self.executor.shutdown(wait=False)
 
@@ -134,7 +135,7 @@ class PulsarDownloader(tk.Tk):
                 text="Download Images", command=self.start_download
             )
             self.downloading = False
-            self.sort_button.config(state=tk.NORMAL)
+            # self.sort_button.config(state=tk.NORMAL)
         else:
             self.after(100, self.check_future)
 
@@ -147,41 +148,32 @@ class PulsarDownloader(tk.Tk):
                 else:
                     pulsar_options[key] = float(value.get())
             except ValueError:
-                # Handle empty string or invalid input
                 pulsar_options[key] = None
         pulsars = list_pulsars(pulsar_options)
-        total_pulsars = len(pulsars)
-        if self.selected_hips.get() == "All":
-            total_pulsars *= 5
+        selected_surveys = self.hips_options[self.selected_hips.get()].split(",")
+        print(f"Selected surveys: {selected_surveys}")
+        total_pulsars = len(pulsars) * len(selected_surveys)
         self.progress["maximum"] = total_pulsars
 
-        for i, pulsar in enumerate(pulsars):
+        progress_count = 0
+        for pulsar in pulsars:
             if not self.downloading:
                 break
-            if self.selected_hips.get() != "All":
+            for survey in selected_surveys:
+                survey = survey.strip()
+                print(f"Downloading {pulsar} for survey {survey}")
                 save_pulsar(
                     pulsar,
-                    self.hips_options[self.selected_hips.get()],
+                    survey,
                     self.fov.get(),
                 )
                 if self.downloading:
-                    self.progress["value"] = i + 1
-                    self.progress_label_text.set(f"{i + 1}/{total_pulsars}")
+                    progress_count += 1
+                    self.progress["value"] = progress_count
+                    self.progress_label_text.set(f"{progress_count}/{total_pulsars}")
                     self.update_idletasks()  # Update the GUI
-            else:
-                for hips_option in self.hips_options.values():
-                    if hips_option != "ALL":
-                        save_pulsar(
-                            pulsar,
-                            hips_option,
-                            self.fov.get(),
-                        )
-                        if self.downloading:
-                            self.progress["value"] += 1
-                            self.progress_label_text.set(
-                                f"{self.progress['value']}/{total_pulsars}"
-                            )
-                            self.update_idletasks()  # Update the GUI
+
+        print("Download completed")
 
     def open_sorter(self):
         sorter_window = PulsarSorter(self)  # Pass self as the parent window

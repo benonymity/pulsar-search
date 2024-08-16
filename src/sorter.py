@@ -15,7 +15,7 @@ class PulsarSorter:
     def __init__(self, parent):
         self.window = tk.Toplevel(parent)
         self.window.title("Pulsar Viewer")
-        self.window.geometry("890x690")  # Increased width to accommodate new info
+        self.window.geometry("890x700")  # Increased width to accommodate new info
         self.window.resizable(False, False)
         self.current_images = []
         self.current_image_index = 0
@@ -50,6 +50,8 @@ class PulsarSorter:
         self.circles_label.pack(side=tk.TOP, fill=tk.X)
         self.noise_label = ttk.Label(self.info_frame, text="", anchor="w")
         self.noise_label.pack(side=tk.TOP, fill=tk.X)
+
+        self.apply_to_viewer_var = tk.BooleanVar()
 
         ttk.Separator(self.info_frame, orient="horizontal").pack(fill="x", pady=10)
 
@@ -222,12 +224,16 @@ class PulsarSorter:
 
         # Create sliders for each survey
         self.survey_sliders = {}
+        self.entry_vars = {}
         for survey in self.survey_offsets.keys():
             slider_label = ttk.Label(slider_frame, text=survey)
             slider_label.pack(side=tk.TOP, pady=(10, 0))
 
+            slider_frame_inner = ttk.Frame(slider_frame)
+            slider_frame_inner.pack(side=tk.TOP, fill=tk.X)
+
             slider = ttk.Scale(
-                slider_frame,
+                slider_frame_inner,
                 from_=-100,
                 to=100,
                 orient=tk.HORIZONTAL,
@@ -235,8 +241,20 @@ class PulsarSorter:
                 value=self.survey_offsets[survey],
                 command=lambda val, s=survey: self.update_survey_offset(s, float(val)),
             )
-            slider.pack(side=tk.TOP)
+            slider.pack(side=tk.LEFT)
             self.survey_sliders[survey] = slider
+
+            entry_var = tk.StringVar()
+            entry_var.set(f"{self.survey_offsets[survey]:.1f}")
+            entry = ttk.Entry(slider_frame_inner, textvariable=entry_var, width=5)
+            entry.pack(side=tk.RIGHT, padx=(0, 5))
+            self.entry_vars[survey] = entry_var
+
+            entry.bind("<Return>", lambda event, s=survey: self.update_from_entry(s))
+
+            # Add tickmark at 0
+            ttk.Label(slider_frame_inner, text="|").place(x=100, y=20)
+            ttk.Label(slider_frame_inner, text="0").place(x=97, y=35)
 
         # Create a frame for the image
         self.settings_image_frame = ttk.Frame(settings_window)
@@ -244,14 +262,15 @@ class PulsarSorter:
             side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10
         )
 
+        def done():
+            settings_window.destroy()
+            self.update_image()
+
         # Add a "Done" button
-        done_button = ttk.Button(
-            slider_frame, text="Done", command=settings_window.destroy
-        )
+        done_button = ttk.Button(slider_frame, text="Done", command=done)
         done_button.pack(side=tk.BOTTOM, pady=10)
 
         # Add apply to viewer checkbox
-        self.apply_to_viewer_var = tk.BooleanVar()
         apply_to_viewer_checkbox = ttk.Checkbutton(
             slider_frame,
             text="Apply to Viewer",
@@ -265,6 +284,22 @@ class PulsarSorter:
         self.settings_image_label = ttk.Label(self.settings_image_frame)
         self.settings_image_label.pack(fill=tk.BOTH, expand=True)
         self.update_combined_image()
+
+    def update_survey_offset(self, survey, value):
+        self.survey_offsets[survey] = value
+        self.entry_vars[survey].set(f"{value:.1f}")
+        self.update_combined_image()
+
+    def update_from_entry(self, survey):
+        try:
+            value = float(self.entry_vars[survey].get())
+            value = max(-100, min(100, value))  # Clamp value between -100 and 100
+            self.survey_sliders[survey].set(value)
+            self.survey_offsets[survey] = value
+            self.update_combined_image()
+        except ValueError:
+            # If the entry is not a valid float, reset it to the current slider value
+            self.entry_vars[survey].set(f"{self.survey_offsets[survey]:.1f}")
 
     def create_combined_image(self):
         combined_image = np.zeros_like(
